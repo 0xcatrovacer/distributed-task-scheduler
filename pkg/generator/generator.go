@@ -3,7 +3,10 @@ package generator
 import (
 	"distributed-task-scheduler/pkg/rabbitmq"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"os"
+	"strconv"
 	"time"
 
 	"github.com/google/uuid"
@@ -41,12 +44,22 @@ func NewGenerator(amqpURL string, queueName string, interval time.Duration) (*Ge
 }
 
 func (g *Generator) generateTask() (*Task, error) {
+	cpuLoad, err1 := strconv.Atoi(os.Getenv("TASK_CPU_LOAD"))
+	diskLoad, err2 := strconv.Atoi(os.Getenv("TASK_DISK_LOAD"))
+	memLoad, err3 := strconv.Atoi(os.Getenv("TASK_MEMORY_LOAD"))
+	bwLoad, err4 := strconv.Atoi(os.Getenv("TASK_BANDWIDTH_LOAD"))
+	execTime, err5 := strconv.Atoi(os.Getenv("TASK_EXECUTION_TIME"))
+
+	if err1 != nil || err2 != nil || err3 != nil || err4 != nil || err5 != nil {
+		return nil, errors.New("failed to get task metrics")
+	}
+
 	taskMetrics := &TaskMetricsContent{
-		CpuLoad:       1,
-		DiskLoad:      1,
-		MemoryLoad:    1,
-		BandwidthLoad: 1,
-		ExecutionTime: 10,
+		CpuLoad:       cpuLoad,
+		DiskLoad:      diskLoad,
+		MemoryLoad:    memLoad,
+		BandwidthLoad: bwLoad,
+		ExecutionTime: execTime,
 	}
 
 	return &Task{
