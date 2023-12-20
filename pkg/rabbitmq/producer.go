@@ -1,6 +1,7 @@
 package rabbitmq
 
 import (
+	"context"
 	"fmt"
 
 	"github.com/rabbitmq/amqp091-go"
@@ -40,4 +41,22 @@ func NewProducer(amqpURL string, queueName string) (*Producer, error) {
 		channel:    channel,
 		queue:      queueName,
 	}, nil
+}
+
+func (p *Producer) PublishMessage(message string) error {
+	err := p.channel.PublishWithContext(
+		context.Background(),
+		"",
+		p.queue,
+		false,
+		false,
+		amqp091.Publishing{
+			ContentType: "text/plain",
+			Body:        []byte(message),
+		},
+	)
+	if err != nil {
+		return fmt.Errorf("failed to publish a message: %w", err)
+	}
+	return nil
 }
