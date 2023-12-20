@@ -18,9 +18,9 @@ func main() {
 	}
 
 	amqpURL := fmt.Sprintf("amqp://%s:%s@%s:%s/",
-		os.Getenv("RABBITMQ_USER"),
-		os.Getenv("RABBITMQ_PASSWORD"),
-		os.Getenv("RABBITMQ_SERVER"),
+		os.Getenv("RABBITMQ_DEFAULT_USER"),
+		os.Getenv("RABBITMQ_DEFAULT_PASS"),
+		os.Getenv("RABBITMQ_HOST"),
 		os.Getenv("RABBITMQ_PORT"),
 	)
 
