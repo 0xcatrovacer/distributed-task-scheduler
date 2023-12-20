@@ -1,6 +1,8 @@
 package rabbitmq
 
 import (
+	messagehandlers "distributed-task-scheduler/pkg/message-handlers"
+	"encoding/json"
 	"fmt"
 	"log"
 
@@ -70,7 +72,15 @@ func (c *Consumer) Consume() {
 
 			switch msg.Type {
 			case "TASK":
-				// task handler
+				var taskMsgMetrics messagehandlers.TaskMessageMetrics
+
+				err := json.Unmarshal(msg.Metrics, &taskMsgMetrics)
+				if err != nil {
+					log.Printf("could not resolve msg metrics: %v", err.Error())
+					continue
+				}
+
+				taskMsgMetrics.HandleMessage()
 			default:
 				log.Printf("Unknown msg type: %v", msg.Type)
 			}

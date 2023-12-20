@@ -7,9 +7,9 @@ import (
 )
 
 type Message struct {
-	Id      uuid.UUID
+	ID      uuid.UUID
 	Type    string
-	Content json.RawMessage
+	Metrics json.RawMessage
 }
 
 func ParseMessage(data []byte) (*Message, error) {
