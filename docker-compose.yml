@@ -13,6 +13,19 @@ services:
       redis:
         condition: service_healthy
 
+  server:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    command: ["./server"]
+    ports:
+      - "8003:8003"
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
   rabbitmq:
     image: rabbitmq:3-management
     environment:
