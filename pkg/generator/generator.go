@@ -24,7 +24,7 @@ type Generator struct {
 	generateInterval     time.Duration
 }
 
-func NewGenerator(amqpURL string, taskQueue string, taskRegistryQueue string, interval time.Duration) (*Generator, error) {
+func NewGenerator(amqpURL string, taskRegistryQueue string, interval time.Duration) (*Generator, error) {
 	taskRegistryProducer, err := rabbitmq.NewProducer(amqpURL, taskRegistryQueue)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create producer: %w", err)
