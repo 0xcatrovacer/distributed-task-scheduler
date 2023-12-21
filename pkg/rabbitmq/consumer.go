@@ -80,7 +80,11 @@ func (c *Consumer) Consume() {
 					continue
 				}
 
-				taskMsgMetrics.HandleMessage()
+				taskMsgMetrics.HandleTaskMessage()
+
+			case "TASK_REG":
+				messagehandlers.HandleTaskRegistryMessage()
+
 			default:
 				log.Printf("Unknown msg type: %v", msg.Type)
 			}

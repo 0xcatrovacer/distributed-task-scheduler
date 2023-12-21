@@ -8,6 +8,10 @@ type TaskMessageMetrics struct {
 	ExecutionTime int `json:"execution_time"`
 }
 
-func (h *TaskMessageMetrics) HandleMessage() {
+func (h *TaskMessageMetrics) HandleTaskMessage() {
+	// To be implemented
+}
+
+func HandleTaskRegistryMessage() {
 	// To be implemented
 }

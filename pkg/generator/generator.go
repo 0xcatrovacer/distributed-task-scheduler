@@ -26,20 +26,28 @@ type Task struct {
 	Metrics TaskMetricsContent `json:"metrics"`
 }
 
-type Generator struct {
-	producer         *rabbitmq.Producer
-	generateInterval time.Duration
+type TaskRegistry struct {
+	ID   string `json:"id"`
+	Type string `json:"type"`
 }
 
-func NewGenerator(amqpURL string, queueName string, interval time.Duration) (*Generator, error) {
-	producer, err := rabbitmq.NewProducer(amqpURL, queueName)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create producer: %w", err)
+type Generator struct {
+	taskProducer         *rabbitmq.Producer
+	taskRegistryProducer *rabbitmq.Producer
+	generateInterval     time.Duration
+}
+
+func NewGenerator(amqpURL string, taskQueue string, taskRegistryQueue string, interval time.Duration) (*Generator, error) {
+	taskProducer, err1 := rabbitmq.NewProducer(amqpURL, taskQueue)
+	taskRegistryProducer, err2 := rabbitmq.NewProducer(amqpURL, taskRegistryQueue)
+	if err1 != nil || err2 != nil {
+		return nil, errors.New("failed to create producer")
 	}
 
 	return &Generator{
-		producer:         producer,
-		generateInterval: interval,
+		taskProducer:         taskProducer,
+		taskRegistryProducer: taskRegistryProducer,
+		generateInterval:     interval,
 	}, nil
 }
 
@@ -75,7 +83,16 @@ func (g *Generator) publishTask(task *Task) error {
 		return fmt.Errorf("error marshalling task: %w", err)
 	}
 
-	return g.producer.PublishMessage(string(taskJSON))
+	return g.taskProducer.PublishMessage(string(taskJSON))
+}
+
+func (g *Generator) publishTaskResgistry(taskReg *TaskRegistry) error {
+	taskJSON, err := json.Marshal(taskReg)
+	if err != nil {
+		return fmt.Errorf("error marshalling task: %w", err)
+	}
+
+	return g.taskRegistryProducer.PublishMessage(string(taskJSON))
 }
 
 func (g *Generator) Start() {
@@ -89,11 +106,19 @@ func (g *Generator) Start() {
 			continue
 		}
 
-		err = g.publishTask(task)
-		if err != nil {
-			fmt.Printf("Error publishing task: %v\n", err)
+		err1 := g.publishTask(task)
+
+		taskRegistry := &TaskRegistry{
+			ID:   task.ID,
+			Type: "TASK_REG",
 		}
 
-		fmt.Printf("Published task %v to queue", task.ID)
+		err2 := g.publishTaskResgistry(taskRegistry)
+
+		if err1 != nil || err2 != nil {
+			fmt.Printf("Error publishing task")
+		}
+
+		fmt.Printf("Published task %v to queues task queue and task registry queue", task.ID)
 	}
 }
