@@ -12,18 +12,14 @@ import (
 	"github.com/google/uuid"
 )
 
-type TaskMetricsContent struct {
-	CpuLoad       int `json:"cpu_load"`
-	DiskLoad      int `json:"disk_load"`
-	MemoryLoad    int `json:"memory_load"`
-	BandwidthLoad int `json:"bandwidth_load"`
-	ExecutionTime int `json:"execution_time"`
-}
-
 type Task struct {
-	ID      string             `json:"id"`
-	Type    string             `json:"type"`
-	Metrics TaskMetricsContent `json:"metrics"`
+	ID            string `json:"id"`
+	Status        string `json:"status"`
+	CpuLoad       int    `json:"cpu_load"`
+	DiskLoad      int    `json:"disk_load"`
+	MemoryLoad    int    `json:"memory_load"`
+	BandwidthLoad int    `json:"bandwidth_load"`
+	ExecutionTime int    `json:"execution_time"`
 }
 
 type TaskRegistry struct {
@@ -59,28 +55,24 @@ func (g *Generator) generateTask() (*Task, error) {
 		return nil, errors.New("failed to get task metrics")
 	}
 
-	taskMetrics := &TaskMetricsContent{
+	return &Task{
+		ID:            uuid.New().String(),
+		Status:        "pending",
 		CpuLoad:       cpuLoad,
 		DiskLoad:      diskLoad,
 		MemoryLoad:    memLoad,
 		BandwidthLoad: bwLoad,
 		ExecutionTime: execTime,
-	}
-
-	return &Task{
-		ID:      uuid.New().String(),
-		Type:    "TASK",
-		Metrics: *taskMetrics,
 	}, nil
 }
 
-func (g *Generator) publishTaskResgistry(taskReg *TaskRegistry) error {
-	taskJSON, err := json.Marshal(taskReg)
+func (g *Generator) publishTaskResgistryMessage(taskReg *TaskRegistry) error {
+	taskRegistryJSON, err := json.Marshal(taskReg)
 	if err != nil {
 		return fmt.Errorf("error marshalling task: %w", err)
 	}
 
-	return g.taskRegistryProducer.PublishMessage(string(taskJSON))
+	return g.taskRegistryProducer.PublishMessage(string(taskRegistryJSON))
 }
 
 func (g *Generator) Start() {
@@ -99,7 +91,7 @@ func (g *Generator) Start() {
 			Type: "TASK_REG",
 		}
 
-		err = g.publishTaskResgistry(taskRegistry)
+		err = g.publishTaskResgistryMessage(taskRegistry)
 
 		if err != nil {
 			fmt.Printf("Error publishing task")
