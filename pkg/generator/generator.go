@@ -32,20 +32,17 @@ type TaskRegistry struct {
 }
 
 type Generator struct {
-	taskProducer         *rabbitmq.Producer
 	taskRegistryProducer *rabbitmq.Producer
 	generateInterval     time.Duration
 }
 
 func NewGenerator(amqpURL string, taskQueue string, taskRegistryQueue string, interval time.Duration) (*Generator, error) {
-	taskProducer, err1 := rabbitmq.NewProducer(amqpURL, taskQueue)
-	taskRegistryProducer, err2 := rabbitmq.NewProducer(amqpURL, taskRegistryQueue)
-	if err1 != nil || err2 != nil {
-		return nil, errors.New("failed to create producer")
+	taskRegistryProducer, err := rabbitmq.NewProducer(amqpURL, taskRegistryQueue)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create producer: %w", err)
 	}
 
 	return &Generator{
-		taskProducer:         taskProducer,
 		taskRegistryProducer: taskRegistryProducer,
 		generateInterval:     interval,
 	}, nil
@@ -77,15 +74,6 @@ func (g *Generator) generateTask() (*Task, error) {
 	}, nil
 }
 
-func (g *Generator) publishTask(task *Task) error {
-	taskJSON, err := json.Marshal(task)
-	if err != nil {
-		return fmt.Errorf("error marshalling task: %w", err)
-	}
-
-	return g.taskProducer.PublishMessage(string(taskJSON))
-}
-
 func (g *Generator) publishTaskResgistry(taskReg *TaskRegistry) error {
 	taskJSON, err := json.Marshal(taskReg)
 	if err != nil {
@@ -106,16 +94,14 @@ func (g *Generator) Start() {
 			continue
 		}
 
-		err1 := g.publishTask(task)
-
 		taskRegistry := &TaskRegistry{
 			ID:   task.ID,
 			Type: "TASK_REG",
 		}
 
-		err2 := g.publishTaskResgistry(taskRegistry)
+		err = g.publishTaskResgistry(taskRegistry)
 
-		if err1 != nil || err2 != nil {
+		if err != nil {
 			fmt.Printf("Error publishing task")
 		}
 

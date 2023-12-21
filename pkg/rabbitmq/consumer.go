@@ -2,7 +2,6 @@ package rabbitmq
 
 import (
 	messagehandlers "distributed-task-scheduler/pkg/message-handlers"
-	"encoding/json"
 	"fmt"
 	"log"
 
@@ -57,7 +56,7 @@ func (c *Consumer) Consume() {
 	)
 
 	if err != nil {
-		log.Fatalf("failed to register a consumer: %v", err.Error())
+		log.Fatalf("failed to create a channel: %v", err.Error())
 	}
 
 	forever := make(chan bool)
@@ -71,17 +70,6 @@ func (c *Consumer) Consume() {
 			}
 
 			switch msg.Type {
-			case "TASK":
-				var taskMsgMetrics messagehandlers.TaskMessageMetrics
-
-				err := json.Unmarshal(msg.Metrics, &taskMsgMetrics)
-				if err != nil {
-					log.Printf("could not resolve msg metrics: %v", err.Error())
-					continue
-				}
-
-				taskMsgMetrics.HandleTaskMessage()
-
 			case "TASK_REG":
 				messagehandlers.HandleTaskRegistryMessage()
 
