@@ -2,6 +2,7 @@ package generator
 
 import (
 	"distributed-task-scheduler/pkg/rabbitmq"
+	"distributed-task-scheduler/pkg/redis"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -12,16 +13,6 @@ import (
 	"github.com/google/uuid"
 )
 
-type Task struct {
-	ID            string `json:"id"`
-	Status        string `json:"status"`
-	CpuLoad       int    `json:"cpu_load"`
-	DiskLoad      int    `json:"disk_load"`
-	MemoryLoad    int    `json:"memory_load"`
-	BandwidthLoad int    `json:"bandwidth_load"`
-	ExecutionTime int    `json:"execution_time"`
-}
-
 type TaskRegistry struct {
 	ID   string `json:"id"`
 	Type string `json:"type"`
@@ -29,6 +20,7 @@ type TaskRegistry struct {
 
 type Generator struct {
 	taskRegistryProducer *rabbitmq.Producer
+	redisClient          *redis.RedisClient
 	generateInterval     time.Duration
 }
 
@@ -38,13 +30,16 @@ func NewGenerator(amqpURL string, taskQueue string, taskRegistryQueue string, in
 		return nil, fmt.Errorf("failed to create producer: %w", err)
 	}
 
+	redisClient := redis.NewClient()
+
 	return &Generator{
 		taskRegistryProducer: taskRegistryProducer,
+		redisClient:          redisClient,
 		generateInterval:     interval,
 	}, nil
 }
 
-func (g *Generator) generateTask() (*Task, error) {
+func (g *Generator) generateTask() (*redis.Task, error) {
 	cpuLoad, err1 := strconv.Atoi(os.Getenv("TASK_CPU_LOAD"))
 	diskLoad, err2 := strconv.Atoi(os.Getenv("TASK_DISK_LOAD"))
 	memLoad, err3 := strconv.Atoi(os.Getenv("TASK_MEMORY_LOAD"))
@@ -55,8 +50,8 @@ func (g *Generator) generateTask() (*Task, error) {
 		return nil, errors.New("failed to get task metrics")
 	}
 
-	return &Task{
-		ID:            uuid.New().String(),
+	return &redis.Task{
+		ID:            uuid.New(),
 		Status:        "pending",
 		CpuLoad:       cpuLoad,
 		DiskLoad:      diskLoad,
@@ -75,6 +70,15 @@ func (g *Generator) publishTaskResgistryMessage(taskReg *TaskRegistry) error {
 	return g.taskRegistryProducer.PublishMessage(string(taskRegistryJSON))
 }
 
+func (g *Generator) saveTaskToRedis(task *redis.Task) error {
+	err := g.redisClient.StoreTask(task)
+	if err != nil {
+		return fmt.Errorf("error saving task to redis: %w", err)
+	}
+
+	return nil
+}
+
 func (g *Generator) Start() {
 	ticker := time.NewTicker(g.generateInterval)
 	defer ticker.Stop()
@@ -86,8 +90,14 @@ func (g *Generator) Start() {
 			continue
 		}
 
+		err = g.saveTaskToRedis(task)
+		if err != nil {
+			fmt.Printf("Error saving task to Redis: %v\n", err)
+			continue
+		}
+
 		taskRegistry := &TaskRegistry{
-			ID:   task.ID,
+			ID:   task.ID.String(),
 			Type: "TASK_REG",
 		}
 
