@@ -10,10 +10,10 @@ import (
 type Producer struct {
 	connection *amqp091.Connection
 	channel    *amqp091.Channel
-	queue      string
+	exchange   string
 }
 
-func NewProducer(amqpURL string, queueName string) (*Producer, error) {
+func NewProducer(amqpURL string, exchange string) (*Producer, error) {
 	connection, err := amqp091.Dial(amqpURL)
 	if err != nil {
 		return nil, fmt.Errorf("error connecting to RabbitMQ: %w", err)
@@ -24,8 +24,9 @@ func NewProducer(amqpURL string, queueName string) (*Producer, error) {
 		return nil, fmt.Errorf("error creating channel: %w", err)
 	}
 
-	_, err = channel.QueueDeclare(
-		queueName,
+	err = channel.ExchangeDeclare(
+		exchange,
+		"topic",
 		true,
 		false,
 		false,
@@ -33,21 +34,21 @@ func NewProducer(amqpURL string, queueName string) (*Producer, error) {
 		nil,
 	)
 	if err != nil {
-		return nil, fmt.Errorf("error declaring queue: %w", err)
+		return nil, fmt.Errorf("error declaring exchange: %w", err)
 	}
 
 	return &Producer{
 		connection: connection,
 		channel:    channel,
-		queue:      queueName,
+		exchange:   exchange,
 	}, nil
 }
 
-func (p *Producer) PublishMessage(message string) error {
+func (p *Producer) PublishMessage(message string, routingKey string) error {
 	err := p.channel.PublishWithContext(
 		context.Background(),
-		"",
-		p.queue,
+		p.exchange,
+		routingKey,
 		false,
 		false,
 		amqp091.Publishing{

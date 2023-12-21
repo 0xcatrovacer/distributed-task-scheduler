@@ -24,7 +24,7 @@ func main() {
 		os.Getenv("RABBITMQ_PORT"),
 	)
 
-	taskRegistryQueue := "Task_Registry_Queue"
+	taskRegistryExchange := "task_registry_exchange"
 
 	generationInterval, err := strconv.Atoi(os.Getenv("TASK_GENERATION_INTERVAL"))
 	if err != nil {
@@ -33,7 +33,7 @@ func main() {
 
 	generateInterval := time.Duration(generationInterval) * time.Millisecond
 
-	generator, err := generator.NewGenerator(amqpURL, taskRegistryQueue, generateInterval)
+	generator, err := generator.NewGenerator(amqpURL, taskRegistryExchange, generateInterval)
 	if err != nil {
 		log.Fatalf("Failed to create task generator: %v", err)
 	}

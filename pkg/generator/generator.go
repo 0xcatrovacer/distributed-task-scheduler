@@ -24,8 +24,8 @@ type Generator struct {
 	generateInterval     time.Duration
 }
 
-func NewGenerator(amqpURL string, taskRegistryQueue string, interval time.Duration) (*Generator, error) {
-	taskRegistryProducer, err := rabbitmq.NewProducer(amqpURL, taskRegistryQueue)
+func NewGenerator(amqpURL string, taskRegistryExchange string, interval time.Duration) (*Generator, error) {
+	taskRegistryProducer, err := rabbitmq.NewProducer(amqpURL, taskRegistryExchange)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create producer: %w", err)
 	}
@@ -43,10 +43,9 @@ func (g *Generator) generateTask() (*redis.Task, error) {
 	cpuLoad, err1 := strconv.Atoi(os.Getenv("TASK_CPU_LOAD"))
 	diskLoad, err2 := strconv.Atoi(os.Getenv("TASK_DISK_LOAD"))
 	memLoad, err3 := strconv.Atoi(os.Getenv("TASK_MEMORY_LOAD"))
-	bwLoad, err4 := strconv.Atoi(os.Getenv("TASK_BANDWIDTH_LOAD"))
-	execTime, err5 := strconv.Atoi(os.Getenv("TASK_EXECUTION_TIME"))
+	execTime, err4 := strconv.Atoi(os.Getenv("TASK_EXECUTION_TIME"))
 
-	if err1 != nil || err2 != nil || err3 != nil || err4 != nil || err5 != nil {
+	if err1 != nil || err2 != nil || err3 != nil || err4 != nil {
 		return nil, errors.New("failed to get task metrics")
 	}
 
@@ -56,7 +55,6 @@ func (g *Generator) generateTask() (*redis.Task, error) {
 		CpuLoad:       cpuLoad,
 		DiskLoad:      diskLoad,
 		MemoryLoad:    memLoad,
-		BandwidthLoad: bwLoad,
 		ExecutionTime: execTime,
 	}, nil
 }
@@ -67,7 +65,7 @@ func (g *Generator) publishTaskResgistryMessage(taskReg *TaskRegistry) error {
 		return fmt.Errorf("error marshalling task: %w", err)
 	}
 
-	return g.taskRegistryProducer.PublishMessage(string(taskRegistryJSON))
+	return g.taskRegistryProducer.PublishMessage(string(taskRegistryJSON), "task_reg")
 }
 
 func (g *Generator) saveTaskToRedis(task *redis.Task) error {
@@ -104,7 +102,7 @@ func (g *Generator) Start() {
 		err = g.publishTaskResgistryMessage(taskRegistry)
 
 		if err != nil {
-			fmt.Printf("Error publishing task")
+			fmt.Printf("Error publishing task: %s", err.Error())
 		}
 
 		fmt.Printf("Published task %v to queues task queue and task registry queue", task.ID)
