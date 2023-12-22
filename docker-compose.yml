@@ -19,7 +19,7 @@ services:
       dockerfile: Dockerfile
     command: ["./server"]
     ports:
-      - "8003:8003"
+      - "8003"
     depends_on:
       rabbitmq:
         condition: service_healthy
