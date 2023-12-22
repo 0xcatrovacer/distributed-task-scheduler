@@ -1,14 +1,12 @@
 package rabbitmq
 
 import (
-	"distributed-task-scheduler/pkg/scheduler"
-	"distributed-task-scheduler/pkg/server"
+	"distributed-task-scheduler/pkg/common"
+	"distributed-task-scheduler/pkg/models"
 
 	"fmt"
 	"log"
 
-	"github.com/go-redis/redis/v8"
-	"github.com/google/uuid"
 	"github.com/rabbitmq/amqp091-go"
 )
 
@@ -76,7 +74,7 @@ func NewConsumer(amqpURL string, queueName string, exchange string, bindingKey s
 	}, nil
 }
 
-func (c *Consumer) Consume(redisClient *redis.Client, serverID uuid.UUID) {
+func (c *Consumer) Consume(scheduler common.TaskScheduler, executor common.TaskExecutor) {
 	msgs, err := c.channel.Consume(
 		c.queue,
 		"",
@@ -95,7 +93,7 @@ func (c *Consumer) Consume(redisClient *redis.Client, serverID uuid.UUID) {
 
 	go func() {
 		for d := range msgs {
-			msg, err := ParseMessage(d.Body)
+			msg, err := models.ParseMessage(d.Body)
 			if err != nil {
 				log.Printf("Error parsing message: %v", err.Error())
 				d.Nack(false, true)
@@ -104,17 +102,13 @@ func (c *Consumer) Consume(redisClient *redis.Client, serverID uuid.UUID) {
 
 			switch msg.Type {
 			case "TASK_REG":
-				message := scheduler.Message{
-					ID:   msg.ID,
-					Type: msg.Type,
+				if err = scheduler.ScheduleTask(msg); err != nil {
+					log.Printf("Error scheduling task: %v", err)
 				}
-				scheduler.HandleTaskRegistry(message)
 			case "TASK_EXECUTE":
-				message := server.Message{
-					ID:   msg.ID,
-					Type: msg.Type,
+				if err = executor.HandleTaskExecution(msg); err != nil {
+					log.Printf("Error executing task: %v", err)
 				}
-				server.HandleTaskExecution(message, redisClient, serverID)
 			default:
 				log.Printf("Unknown msg type: %v", msg.Type)
 			}
