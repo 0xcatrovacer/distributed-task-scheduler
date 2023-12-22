@@ -1,38 +1,30 @@
 package redis
 
 import (
+	"distributed-task-scheduler/pkg/models"
 	"encoding/json"
 
 	"github.com/google/uuid"
 )
 
-type Task struct {
-	ID            uuid.UUID `json:"id"`
-	Status        string    `json:"status"`
-	CpuLoad       int       `json:"cpu_load"`
-	DiskLoad      int       `json:"disk_load"`
-	MemoryLoad    int       `json:"memory_load"`
-	ExecutionTime int       `json:"execution_time"`
-}
-
-func (c *RedisClient) StoreTask(task *Task) error {
+func (c *RedisClient) StoreTask(task *models.Task) error {
 	taskJSON, err := json.Marshal(task)
 	if err != nil {
 		return err
 	}
 
-	_, err = c.Set(ctx, task.ID.String(), taskJSON, 0).Result()
+	_, err = c.Set(ctx, "task:"+task.ID.String(), taskJSON, 0).Result()
 
 	return err
 }
 
-func (c *RedisClient) RetrieveTaskByID(taskID uuid.UUID) (*Task, error) {
+func (c *RedisClient) RetrieveTaskByID(taskID uuid.UUID) (*models.Task, error) {
 	taskJSON, err := c.Get(ctx, taskID.String()).Result()
 	if err != nil {
 		return nil, err
 	}
 
-	var task Task
+	var task models.Task
 
 	err = json.Unmarshal([]byte(taskJSON), &task)
 	if err != nil {
