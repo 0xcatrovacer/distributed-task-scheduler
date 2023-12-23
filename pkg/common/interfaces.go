@@ -17,5 +17,5 @@ type TaskScheduler interface {
 }
 
 type TaskExecutor interface {
-	HandleTaskExecution(msg *models.Message)
+	HandleTaskExecution(msg *models.Message) error
 }
