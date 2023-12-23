@@ -1,4 +1,5 @@
 version: '3.8'
+
 services:
   task-generator:
     build:
@@ -7,6 +8,19 @@ services:
     command: ["./task-generator"]
     ports:
       - "8001:8001"
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  scheduler:
+    build: 
+      context: .
+      dockerfile: Dockerfile
+    command: ["./scheduler"]
+    ports:
+      - "8002:8002"
     depends_on:
       rabbitmq:
         condition: service_healthy
