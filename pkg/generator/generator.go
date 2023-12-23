@@ -1,6 +1,7 @@
 package generator
 
 import (
+	"distributed-task-scheduler/pkg/models"
 	"distributed-task-scheduler/pkg/rabbitmq"
 	"distributed-task-scheduler/pkg/redis"
 	"encoding/json"
@@ -12,11 +13,6 @@ import (
 
 	"github.com/google/uuid"
 )
-
-type TaskRegistry struct {
-	ID   string `json:"id"`
-	Type string `json:"type"`
-}
 
 type Generator struct {
 	taskRegistryProducer *rabbitmq.Producer
@@ -39,7 +35,7 @@ func NewGenerator(amqpURL string, taskRegistryExchange string, interval time.Dur
 	}, nil
 }
 
-func (g *Generator) generateTask() (*redis.Task, error) {
+func (g *Generator) generateTask() (*models.Task, error) {
 	cpuLoad, err1 := strconv.Atoi(os.Getenv("TASK_CPU_LOAD"))
 	diskLoad, err2 := strconv.Atoi(os.Getenv("TASK_DISK_LOAD"))
 	memLoad, err3 := strconv.Atoi(os.Getenv("TASK_MEMORY_LOAD"))
@@ -49,7 +45,7 @@ func (g *Generator) generateTask() (*redis.Task, error) {
 		return nil, errors.New("failed to get task metrics")
 	}
 
-	return &redis.Task{
+	return &models.Task{
 		ID:            uuid.New(),
 		Status:        "pending",
 		CpuLoad:       cpuLoad,
@@ -59,7 +55,7 @@ func (g *Generator) generateTask() (*redis.Task, error) {
 	}, nil
 }
 
-func (g *Generator) publishTaskResgistryMessage(taskReg *TaskRegistry) error {
+func (g *Generator) publishTaskResgistryMessage(taskReg *models.TaskRegistryMessage) error {
 	taskRegistryJSON, err := json.Marshal(taskReg)
 	if err != nil {
 		return fmt.Errorf("error marshalling task: %w", err)
@@ -68,7 +64,7 @@ func (g *Generator) publishTaskResgistryMessage(taskReg *TaskRegistry) error {
 	return g.taskRegistryProducer.PublishMessage(string(taskRegistryJSON), "task_reg")
 }
 
-func (g *Generator) saveTaskToRedis(task *redis.Task) error {
+func (g *Generator) saveTaskToRedis(task *models.Task) error {
 	err := g.redisClient.StoreTask(task)
 	if err != nil {
 		return fmt.Errorf("error saving task to redis: %w", err)
@@ -94,9 +90,14 @@ func (g *Generator) Start() {
 			continue
 		}
 
-		taskRegistry := &TaskRegistry{
-			ID:   task.ID.String(),
-			Type: "TASK_REG",
+		taskRegMsgVal := &models.TaskRegistryMessageValue{
+			TaskID: task.ID,
+		}
+
+		taskRegistry := &models.TaskRegistryMessage{
+			ID:    uuid.New(),
+			Type:  "TASK_REG",
+			Value: *taskRegMsgVal,
 		}
 
 		err = g.publishTaskResgistryMessage(taskRegistry)
