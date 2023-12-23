@@ -104,16 +104,17 @@ func (c *Consumer) Consume(scheduler common.TaskScheduler, executor common.TaskE
 			case "TASK_REG":
 				if err = scheduler.ScheduleTask(msg); err != nil {
 					log.Printf("Error scheduling task: %v", err)
+					d.Nack(false, true)
 				}
 			case "TASK_EXECUTE":
 				if err = executor.HandleTaskExecution(msg); err != nil {
 					log.Printf("Error executing task: %v", err)
+					d.Nack(false, true)
 				}
 			default:
 				log.Printf("Unknown msg type: %v", msg.Type)
+				d.Nack(false, true)
 			}
-
-			d.Ack(false)
 		}
 	}()
 
