@@ -31,7 +31,7 @@ func main() {
 	redisClient := redis.NewClient(&redis.Options{
 		Addr:     os.Getenv("REDIS_ADDRESS"),
 		Password: os.Getenv("REDIS_PASSWORD"),
-		DB:       1,
+		DB:       0,
 	})
 
 	amqpURL := fmt.Sprintf("amqp://%s:%s@%s:%s/",
@@ -44,12 +44,13 @@ func main() {
 	serverID := uuid.New()
 	queueName := "schedule_queue." + serverID.String()
 
-	server.UpdateInitialComputeInfo(redisClient, serverID)
+	server := server.New(redisClient, serverID)
+	server.UpdateInitialComputeInfo()
 
 	consumer, err := rabbitmq.NewConsumer(amqpURL, queueName, "schedule_exchange", serverID.String())
 	if err != nil {
 		log.Fatalf("Error creating new consumer: %v", err.Error())
 	}
 
-	consumer.Consume(redisClient, serverID)
+	consumer.Consume(nil, server)
 }

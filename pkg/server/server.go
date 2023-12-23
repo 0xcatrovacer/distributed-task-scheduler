@@ -2,6 +2,7 @@ package server
 
 import (
 	"context"
+	"distributed-task-scheduler/pkg/models"
 	"encoding/json"
 	"log"
 	"os"
@@ -21,12 +22,19 @@ type ServerStatus struct {
 	DiskLimit         int       `json:"disk_limit"`
 }
 
-type Message struct {
-	ID   uuid.UUID
-	Type string
+type Server struct {
+	redisClient *redis.Client
+	serverID    uuid.UUID
 }
 
-func HandleTaskExecution(msg Message, redisClient *redis.Client, serverID uuid.UUID) {
+func New(redisClient *redis.Client, serverID uuid.UUID) *Server {
+	return &Server{
+		redisClient: redisClient,
+		serverID:    serverID,
+	}
+}
+
+func (s *Server) HandleTaskExecution(msg *models.Message) error {
 	// TODO: Implement task fetching and execution logic
 	// TODO: Implement new compute info calculation logic
 
@@ -34,10 +42,12 @@ func HandleTaskExecution(msg Message, redisClient *redis.Client, serverID uuid.U
 	newMemUtil := 0
 	newDiskUtil := 0
 
-	UpdateComputeInfo(redisClient, serverID, newCpuUtil, newMemUtil, newDiskUtil)
+	s.UpdateComputeInfo(s.serverID, newCpuUtil, newMemUtil, newDiskUtil)
+
+	return nil
 }
 
-func UpdateInitialComputeInfo(client *redis.Client, serverID uuid.UUID) {
+func (s *Server) UpdateInitialComputeInfo() {
 	cpuUtil, err1 := strconv.Atoi(os.Getenv("INITIAL_CPU_UTILIZATION"))
 	cpuLimit, err2 := strconv.Atoi(os.Getenv("CPU_LIMIT"))
 	memUtil, err3 := strconv.Atoi(os.Getenv("INITIAL_MEMORY_UTILIZATION"))
@@ -50,7 +60,7 @@ func UpdateInitialComputeInfo(client *redis.Client, serverID uuid.UUID) {
 	}
 
 	computeInfo := ServerStatus{
-		ID:                serverID,
+		ID:                s.serverID,
 		CpuUtilization:    cpuUtil,
 		CpuLimit:          cpuLimit,
 		MemoryUtilization: memUtil,
@@ -65,16 +75,16 @@ func UpdateInitialComputeInfo(client *redis.Client, serverID uuid.UUID) {
 		return
 	}
 
-	err = client.Set(context.Background(), "server:"+serverID.String(), data, 0).Err()
+	err = s.redisClient.Set(context.Background(), "server:"+s.serverID.String(), data, 0).Err()
 	if err != nil {
 		log.Printf("Error in updating compute info to redis: %s", err.Error())
 	}
 }
 
-func UpdateComputeInfo(client *redis.Client, serverID uuid.UUID, newCpuUtil int, newMemUtil int, newDiskUtil int) {
+func (s *Server) UpdateComputeInfo(serverID uuid.UUID, newCpuUtil int, newMemUtil int, newDiskUtil int) {
 	var computeInfo *ServerStatus
 
-	redata, err := client.Get(context.Background(), "server:"+serverID.String()).Result()
+	redata, err := s.redisClient.Get(context.Background(), "server:"+serverID.String()).Result()
 	if err != nil {
 		log.Printf("compute info not present for server: %s", err.Error())
 	}
@@ -94,7 +104,7 @@ func UpdateComputeInfo(client *redis.Client, serverID uuid.UUID, newCpuUtil int,
 		return
 	}
 
-	err = client.Set(context.Background(), "server:"+serverID.String(), data, 0).Err()
+	err = s.redisClient.Set(context.Background(), "server:"+serverID.String(), data, 0).Err()
 	if err != nil {
 		log.Printf("Error in updating compute info to redis: %s", err.Error())
 	}
