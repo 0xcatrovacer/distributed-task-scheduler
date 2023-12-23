@@ -3,6 +3,7 @@ package scheduler
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log"
 
@@ -43,7 +44,7 @@ func (s *Scheduler) ScheduleTask(msg *models.Message) error {
 		return fmt.Errorf("error fetching task from Redis: %w", err)
 	}
 
-	serverID, err := s.chooseServer()
+	serverID, err := s.chooseServer(task)
 	if err != nil {
 		return fmt.Errorf("error choosing server: %w", err)
 	}
@@ -87,8 +88,49 @@ func (s *Scheduler) fetchTask(taskID string) (*models.Task, error) {
 	return &task, nil
 }
 
-func (s *Scheduler) chooseServer() (string, error) {
-	// TODO: Implement Server selection logic
+func (s *Scheduler) chooseServer(task *models.Task) (string, error) {
+	serverKeys, err := s.redisClient.Keys(context.Background(), "server:*").Result()
+	if err != nil {
+		return "", fmt.Errorf("error getting keys: %w", err)
+	}
 
-	return uuid.New().String(), nil
+	chosenServer := &models.ServerStatus{}
+	minCpuRatio := float64(1)
+
+	for _, key := range serverKeys {
+		var server models.ServerStatus
+
+		serverData, err := s.redisClient.Get(context.Background(), key).Result()
+		if err != nil {
+			return "", fmt.Errorf("error retrieving value for key: %s", err)
+		}
+
+		if err = json.Unmarshal([]byte(serverData), &server); err != nil {
+			return "", fmt.Errorf("error unmarshaling server data: %w", err)
+		}
+
+		cpuUtil := server.CpuUtilization
+		cpuLimit := server.CpuLimit
+		memUtil := server.MemoryUtilization
+		memLimit := server.MemoryLimit
+		diskUtil := server.DiskUtilization
+		diskLimit := server.DiskLimit
+
+		newCpuRatio := float64((cpuUtil + task.CpuLoad) / cpuLimit)
+		newMemRatio := float64((memUtil + task.MemoryLoad) / memLimit)
+		newDiskRatio := float64((diskUtil + task.DiskLoad) / diskLimit)
+
+		if newCpuRatio < 0.9 && newMemRatio < 0.9 && newDiskRatio <= 0.9 {
+			if newCpuRatio < minCpuRatio {
+				minCpuRatio = newCpuRatio
+				chosenServer = &server
+			}
+		}
+	}
+
+	if chosenServer.ID == uuid.Nil {
+		return "", errors.New("could not find free server")
+	}
+
+	return chosenServer.ID.String(), nil
 }
