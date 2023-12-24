@@ -73,39 +73,46 @@ func (g *Generator) saveTaskToRedis(task *models.Task) error {
 	return nil
 }
 
-func (g *Generator) Start() {
+func (g *Generator) Start(runDuration int) {
 	ticker := time.NewTicker(g.generateInterval)
 	defer ticker.Stop()
 
-	for range ticker.C {
-		task, err := g.generateTask()
-		if err != nil {
-			fmt.Printf("Error generating task: %v\n", err)
-			continue
+	stopTime := time.After(time.Duration(runDuration) * time.Second)
+
+	for {
+		select {
+		case <-ticker.C:
+			task, err := g.generateTask()
+			if err != nil {
+				fmt.Printf("Error generating task: %v\n", err)
+				continue
+			}
+
+			err = g.saveTaskToRedis(task)
+			if err != nil {
+				fmt.Printf("Error saving task to Redis: %v\n", err)
+				continue
+			}
+
+			taskRegMsgVal := &models.TaskRegistryMessageValue{
+				TaskID: task.ID,
+			}
+
+			taskRegistry := &models.TaskRegistryMessage{
+				ID:    uuid.New(),
+				Type:  "TASK_REG",
+				Value: *taskRegMsgVal,
+			}
+
+			err = g.publishTaskResgistryMessage(taskRegistry)
+
+			if err != nil {
+				fmt.Printf("Error publishing task: %s", err.Error())
+			}
+
+		case <-stopTime:
+			fmt.Println("Simulation Complete")
+			return
 		}
-
-		err = g.saveTaskToRedis(task)
-		if err != nil {
-			fmt.Printf("Error saving task to Redis: %v\n", err)
-			continue
-		}
-
-		taskRegMsgVal := &models.TaskRegistryMessageValue{
-			TaskID: task.ID,
-		}
-
-		taskRegistry := &models.TaskRegistryMessage{
-			ID:    uuid.New(),
-			Type:  "TASK_REG",
-			Value: *taskRegMsgVal,
-		}
-
-		err = g.publishTaskResgistryMessage(taskRegistry)
-
-		if err != nil {
-			fmt.Printf("Error publishing task: %s", err.Error())
-		}
-
-		fmt.Printf("Published task %v to queues task queue and task registry queue", task.ID)
 	}
 }

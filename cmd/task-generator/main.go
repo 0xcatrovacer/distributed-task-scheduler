@@ -38,5 +38,10 @@ func main() {
 		log.Fatalf("Failed to create task generator: %v", err)
 	}
 
-	generator.Start()
+	runDuration, err := strconv.Atoi(os.Getenv("SIMULATION_RUN_DURATION"))
+	if err != nil {
+		log.Fatalf("Error getting Simulation Run Duration: %v", runDuration)
+	}
+
+	generator.Start(runDuration)
 }
