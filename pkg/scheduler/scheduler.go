@@ -124,8 +124,11 @@ func (s *Scheduler) chooseServer(task *models.Task) (string, error) {
 		if newCpuRatio < 0.9 && newMemRatio < 0.9 && newDiskRatio <= 0.9 {
 			if newCpuRatio < minCpuRatio {
 				minCpuRatio = newCpuRatio
+				minDiskRatio = newDiskRatio
 				chosenServer = &server
 			} else if newCpuRatio == minCpuRatio && newDiskRatio < minDiskRatio {
+				minCpuRatio = newCpuRatio
+				minDiskRatio = newDiskRatio
 				chosenServer = &server
 			}
 		}
