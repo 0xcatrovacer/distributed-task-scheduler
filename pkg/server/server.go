@@ -3,9 +3,10 @@ package server
 import (
 	"context"
 	"distributed-task-scheduler/pkg/models"
+	"distributed-task-scheduler/pkg/rabbitmq"
 	"encoding/json"
+	"errors"
 	"fmt"
-	"log"
 	"os"
 	"strconv"
 	"time"
@@ -16,12 +17,14 @@ import (
 
 type Server struct {
 	redisClient *redis.Client
+	producer    *rabbitmq.Producer
 	serverID    uuid.UUID
 }
 
-func New(redisClient *redis.Client, serverID uuid.UUID) *Server {
+func New(redisClient *redis.Client, producer *rabbitmq.Producer, serverID uuid.UUID) *Server {
 	return &Server{
 		redisClient: redisClient,
+		producer:    producer,
 		serverID:    serverID,
 	}
 }
@@ -64,18 +67,27 @@ func (s *Server) HandleTaskExecution(msg *models.Message) error {
 	newMemUtil := memUtil + task.MemoryLoad
 	newDiskUtil := diskUtil + task.DiskLoad
 
-	s.UpdateComputeInfo(s.serverID, newCpuUtil, newMemUtil, newDiskUtil)
+	err = s.UpdateComputeInfo(s.serverID, newCpuUtil, newMemUtil, newDiskUtil)
+	if err != nil {
+		return fmt.Errorf("unable to update compute info: %w", err)
+	}
 
-	execution := time.After(time.Duration(task.ExecutionTime))
+	execution := time.After(time.Duration(task.ExecutionTime) * time.Millisecond)
 
 	<-execution
 
 	newCpuUtil -= task.CpuLoad
 	newMemUtil -= task.MemoryLoad
 
-	s.UpdateComputeInfo(s.serverID, newCpuUtil, newMemUtil, newDiskUtil)
+	err = s.UpdateComputeInfo(s.serverID, newCpuUtil, newMemUtil, newDiskUtil)
+	if err != nil {
+		return fmt.Errorf("unable to update compute info: %w", err)
+	}
 
-	// TODO: Add logic to send to completed queue
+	err = s.PublishCompletedTaskToQueue(taskID)
+	if err != nil {
+		return fmt.Errorf("unable to publish completed task message: %w", err)
+	}
 
 	return nil
 }
@@ -106,7 +118,7 @@ func (s *Server) fetchServer(serverID string) (*models.ServerStatus, error) {
 	return &serverStat, nil
 }
 
-func (s *Server) UpdateInitialComputeInfo() {
+func (s *Server) UpdateInitialComputeInfo() error {
 	cpuUtil, err1 := strconv.Atoi(os.Getenv("INITIAL_CPU_UTILIZATION"))
 	cpuLimit, err2 := strconv.Atoi(os.Getenv("CPU_LIMIT"))
 	memUtil, err3 := strconv.Atoi(os.Getenv("INITIAL_MEMORY_UTILIZATION"))
@@ -115,7 +127,7 @@ func (s *Server) UpdateInitialComputeInfo() {
 	diskLimit, err6 := strconv.Atoi(os.Getenv("DISK_LIMIT"))
 
 	if err1 != nil || err2 != nil || err3 != nil || err4 != nil || err5 != nil || err6 != nil {
-		log.Println("unable to fetch initial compute info")
+		return errors.New("unable to fetch initial compute info")
 	}
 
 	computeInfo := models.ServerStatus{
@@ -130,27 +142,28 @@ func (s *Server) UpdateInitialComputeInfo() {
 
 	data, err := json.Marshal(computeInfo)
 	if err != nil {
-		log.Printf("Error marshalling compute info: %s", err.Error())
-		return
+		return fmt.Errorf("error marshalling compute info: %w", err)
 	}
 
 	err = s.redisClient.Set(context.Background(), "server:"+s.serverID.String(), data, 0).Err()
 	if err != nil {
-		log.Printf("Error in updating compute info to redis: %s", err.Error())
+		return fmt.Errorf("error updating compute info to redis: %w", err)
 	}
+
+	return nil
 }
 
-func (s *Server) UpdateComputeInfo(serverID uuid.UUID, newCpuUtil int, newMemUtil int, newDiskUtil int) {
+func (s *Server) UpdateComputeInfo(serverID uuid.UUID, newCpuUtil int, newMemUtil int, newDiskUtil int) error {
 	computeInfo := &models.ServerStatus{}
 
 	redata, err := s.redisClient.Get(context.Background(), "server:"+serverID.String()).Result()
 	if err != nil {
-		log.Printf("compute info not present for server: %s", err.Error())
+		return fmt.Errorf("compute info not present for server: %w", err)
 	}
 
 	err = json.Unmarshal([]byte(redata), computeInfo)
 	if err != nil {
-		log.Printf("could not bind data: %s", err.Error())
+		return fmt.Errorf("could not bind data: %w", err)
 	}
 
 	computeInfo.CpuUtilization = newCpuUtil
@@ -159,12 +172,40 @@ func (s *Server) UpdateComputeInfo(serverID uuid.UUID, newCpuUtil int, newMemUti
 
 	data, err := json.Marshal(computeInfo)
 	if err != nil {
-		log.Printf("Error marshalling compute info: %s", err.Error())
-		return
+		return fmt.Errorf("error marshalling compute info: %w", err)
 	}
 
 	err = s.redisClient.Set(context.Background(), "server:"+serverID.String(), data, 0).Err()
 	if err != nil {
-		log.Printf("Error in updating compute info to redis: %s", err.Error())
+		return fmt.Errorf("error in updating compute info to redis: %w", err)
 	}
+
+	return nil
+}
+
+func (s *Server) PublishCompletedTaskToQueue(taskID uuid.UUID) error {
+	completedTaskMsgValue := &models.UpdateMessageValue{
+		TaskID: taskID,
+		Status: "done",
+	}
+
+	completedTaskMsg := &models.UpdateMessage{
+		ID:    uuid.New(),
+		Type:  "TASK_COMPLETED",
+		Value: *completedTaskMsgValue,
+	}
+
+	msgBytes, err := json.Marshal(completedTaskMsg)
+	if err != nil {
+		return fmt.Errorf("unable to marshal completed task json: %w", err)
+	}
+
+	completedMsgRoutingKey := "completed_key"
+
+	err = s.producer.PublishMessage(string(msgBytes), completedMsgRoutingKey)
+	if err != nil {
+		return fmt.Errorf("unable to publish message: %w", err)
+	}
+
+	return nil
 }

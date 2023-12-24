@@ -40,12 +40,20 @@ func main() {
 		os.Getenv("RABBITMQ_HOST"),
 		os.Getenv("RABBITMQ_PORT"),
 	)
+	producer, err := rabbitmq.NewProducer(amqpURL, "completed_exchange")
+	if err != nil {
+		log.Fatalf("Could not create rabbitmq producer: %v", err.Error())
+	}
 
 	serverID := uuid.New()
 	queueName := "schedule_queue." + serverID.String()
 
-	server := server.New(redisClient, serverID)
-	server.UpdateInitialComputeInfo()
+	server := server.New(redisClient, producer, serverID)
+
+	err = server.UpdateInitialComputeInfo()
+	if err != nil {
+		log.Fatalf("Error updating initial compute info: %v", err.Error())
+	}
 
 	consumer, err := rabbitmq.NewConsumer(amqpURL, queueName, "schedule_exchange", serverID.String())
 	if err != nil {
