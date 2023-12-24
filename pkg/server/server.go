@@ -67,7 +67,7 @@ func (s *Server) HandleTaskExecution(msg *models.Message) error {
 	newMemUtil := memUtil + task.MemoryLoad
 	newDiskUtil := diskUtil + task.DiskLoad
 
-	err = s.UpdateComputeInfo(s.serverID, newCpuUtil, newMemUtil, newDiskUtil)
+	err = s.UpdateComputeInfo(s.serverID, newCpuUtil, newMemUtil, newDiskUtil, "received")
 	if err != nil {
 		return fmt.Errorf("unable to update compute info: %w", err)
 	}
@@ -79,7 +79,7 @@ func (s *Server) HandleTaskExecution(msg *models.Message) error {
 	newCpuUtil -= task.CpuLoad
 	newMemUtil -= task.MemoryLoad
 
-	err = s.UpdateComputeInfo(s.serverID, newCpuUtil, newMemUtil, newDiskUtil)
+	err = s.UpdateComputeInfo(s.serverID, newCpuUtil, newMemUtil, newDiskUtil, "executed")
 	if err != nil {
 		return fmt.Errorf("unable to update compute info: %w", err)
 	}
@@ -138,6 +138,7 @@ func (s *Server) UpdateInitialComputeInfo() error {
 		MemoryLimit:       memLimit,
 		DiskUtilization:   diskUtil,
 		DiskLimit:         diskLimit,
+		TasksExecuted:     0,
 	}
 
 	data, err := json.Marshal(computeInfo)
@@ -153,7 +154,7 @@ func (s *Server) UpdateInitialComputeInfo() error {
 	return nil
 }
 
-func (s *Server) UpdateComputeInfo(serverID uuid.UUID, newCpuUtil int, newMemUtil int, newDiskUtil int) error {
+func (s *Server) UpdateComputeInfo(serverID uuid.UUID, newCpuUtil int, newMemUtil int, newDiskUtil int, taskType string) error {
 	computeInfo := &models.ServerStatus{}
 
 	redata, err := s.redisClient.Get(context.Background(), "server:"+serverID.String()).Result()
@@ -169,6 +170,9 @@ func (s *Server) UpdateComputeInfo(serverID uuid.UUID, newCpuUtil int, newMemUti
 	computeInfo.CpuUtilization = newCpuUtil
 	computeInfo.MemoryUtilization = newMemUtil
 	computeInfo.DiskUtilization = newDiskUtil
+	if taskType == "executed" {
+		computeInfo.TasksExecuted += 1
+	}
 
 	data, err := json.Marshal(computeInfo)
 	if err != nil {

@@ -10,4 +10,5 @@ type ServerStatus struct {
 	MemoryLimit       int       `json:"mem_limit"`
 	DiskUtilization   int       `json:"disk_utilization"`
 	DiskLimit         int       `json:"disk_limit"`
+	TasksExecuted     int       `json:"tasks_executed"`
 }
