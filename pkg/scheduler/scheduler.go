@@ -96,6 +96,7 @@ func (s *Scheduler) chooseServer(task *models.Task) (string, error) {
 
 	chosenServer := &models.ServerStatus{}
 	minCpuRatio := float64(1)
+	minDiskRatio := float64(1)
 
 	for _, key := range serverKeys {
 		var server models.ServerStatus
@@ -124,6 +125,8 @@ func (s *Scheduler) chooseServer(task *models.Task) (string, error) {
 			if newCpuRatio < minCpuRatio {
 				minCpuRatio = newCpuRatio
 				chosenServer = &server
+			} else if newCpuRatio == minCpuRatio && newDiskRatio < minDiskRatio {
+				chosenServer = &server
 			}
 		}
 	}
@@ -133,4 +136,39 @@ func (s *Scheduler) chooseServer(task *models.Task) (string, error) {
 	}
 
 	return chosenServer.ID.String(), nil
+}
+
+func (s *Scheduler) UpdateTaskStatus(msg *models.Message) error {
+	var taskCompleteMsgValue models.UpdateMessageValue
+
+	if err := json.Unmarshal([]byte(msg.Value), &taskCompleteMsgValue); err != nil {
+		return fmt.Errorf("error in unmarshalling msg value: %w", err)
+	}
+
+	var task models.Task
+
+	taskData, err := s.redisClient.Get(context.Background(), "task:"+taskCompleteMsgValue.TaskID.String()).Result()
+	if err != nil {
+		return fmt.Errorf("error in fetching task from redis: %w", err)
+	}
+
+	if err := json.Unmarshal([]byte(taskData), &task); err != nil {
+		return fmt.Errorf("error in unmarshalling task data: %w", err)
+	}
+
+	task.Status = taskCompleteMsgValue.Status
+
+	data, err := json.Marshal(task)
+	if err != nil {
+		return fmt.Errorf("error in marshalling task data: %w", err)
+	}
+
+	err = s.redisClient.Set(context.Background(), "task:"+taskCompleteMsgValue.TaskID.String(), data, 0).Err()
+	if err != nil {
+		return fmt.Errorf("error in setting task data to redis: %w", err)
+	}
+
+	fmt.Println("Updated task " + task.ID.String() + " to status " + taskCompleteMsgValue.Status)
+
+	return nil
 }

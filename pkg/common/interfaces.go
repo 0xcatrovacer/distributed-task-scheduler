@@ -14,6 +14,7 @@ type MessagePublisher interface {
 
 type TaskScheduler interface {
 	ScheduleTask(msg *models.Message) error
+	UpdateTaskStatus(msg *models.Message) error
 }
 
 type TaskExecutor interface {

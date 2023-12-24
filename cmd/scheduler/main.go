@@ -32,11 +32,11 @@ func main() {
 
 	taskRegistryQueue := "task_registry_queue"
 	taskExchange := "task_registry_exchange"
-	routingKey := "task_reg"
+	taskRegistryRoutingKey := "task_reg"
 
-	consumer, err := rabbitmq.NewConsumer(amqpURL, taskRegistryQueue, taskExchange, routingKey)
+	taskRegistryQueueConsumer, err := rabbitmq.NewConsumer(amqpURL, taskRegistryQueue, taskExchange, taskRegistryRoutingKey)
 	if err != nil {
-		log.Fatalf("Failed to create consumer: %s", err)
+		log.Fatalf("Failed to create taskRegistryQueueConsumer: %s", err)
 	}
 
 	producer, err := rabbitmq.NewProducer(amqpURL, "schedule_exchange")
@@ -46,5 +46,22 @@ func main() {
 
 	taskScheduler := scheduler.New(redisClient, producer)
 
-	consumer.Consume(taskScheduler, nil)
+	taskCompleteQueue := "task_complete_queue"
+	completeExchange := "completed_exchange"
+	taskCompletedRoutingKey := "completed_key"
+
+	taskCompleteQueueConsumer, err := rabbitmq.NewConsumer(amqpURL, taskCompleteQueue, completeExchange, taskCompletedRoutingKey)
+	if err != nil {
+		log.Fatalf("Failed to create taskRegistryQueueConsumer: %s", err)
+	}
+
+	go func() {
+		taskRegistryQueueConsumer.Consume(taskScheduler, nil)
+	}()
+
+	go func() {
+		taskCompleteQueueConsumer.Consume(taskScheduler, nil)
+	}()
+
+	select {}
 }
