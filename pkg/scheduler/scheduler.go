@@ -148,30 +148,25 @@ func (s *Scheduler) UpdateTaskStatus(msg *models.Message) error {
 		return fmt.Errorf("error in unmarshalling msg value: %w", err)
 	}
 
-	var task models.Task
+	taskData, err := s.fetchTask(taskCompleteMsgValue.TaskID.String())
 
-	taskData, err := s.redisClient.Get(context.Background(), "task:"+taskCompleteMsgValue.TaskID.String()).Result()
+	taskData.Status = taskCompleteMsgValue.Status
+
 	if err != nil {
-		return fmt.Errorf("error in fetching task from redis: %w", err)
+		return fmt.Errorf("error in fetching task: %w", err)
 	}
 
-	if err := json.Unmarshal([]byte(taskData), &task); err != nil {
-		return fmt.Errorf("error in unmarshalling task data: %w", err)
-	}
-
-	task.Status = taskCompleteMsgValue.Status
-
-	data, err := json.Marshal(task)
+	data, err := json.Marshal(taskData)
 	if err != nil {
 		return fmt.Errorf("error in marshalling task data: %w", err)
 	}
 
-	err = s.redisClient.Set(context.Background(), "task:"+taskCompleteMsgValue.TaskID.String(), data, 0).Err()
+	err = s.redisClient.Set(context.Background(), "task:"+taskData.ID.String(), data, 0).Err()
 	if err != nil {
 		return fmt.Errorf("error in setting task data to redis: %w", err)
 	}
 
-	fmt.Println("Updated task " + task.ID.String() + " to status " + taskCompleteMsgValue.Status)
+	fmt.Println("Updated task " + taskData.ID.String() + " to status " + taskData.Status)
 
 	return nil
 }

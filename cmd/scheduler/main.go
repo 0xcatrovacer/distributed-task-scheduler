@@ -55,6 +55,8 @@ func main() {
 		log.Fatalf("Failed to create taskRegistryQueueConsumer: %s", err)
 	}
 
+	forever := make(chan bool)
+
 	go func() {
 		taskRegistryQueueConsumer.Consume(taskScheduler, nil)
 	}()
@@ -63,5 +65,5 @@ func main() {
 		taskCompleteQueueConsumer.Consume(taskScheduler, nil)
 	}()
 
-	select {}
+	<-forever
 }
